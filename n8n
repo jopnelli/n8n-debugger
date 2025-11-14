@@ -51,7 +51,12 @@ function loadConfig() {
 
   // Fallback to JSON config
   if (fs.existsSync(CONFIG_FILE)) {
-    return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    try {
+      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    } catch (error) {
+      console.error(`❌ Invalid JSON in ${CONFIG_FILE}: ${error.message}`);
+      process.exit(1);
+    }
   }
 
   // No config found
@@ -127,6 +132,196 @@ async function listWorkflows() {
   console.log(`\nTotal: ${response.data.length} workflows\n`);
 }
 
+async function searchWorkflows(searchTerm) {
+  const config = loadConfig();
+  const query = config.projectId ? `?projectId=${config.projectId}` : '';
+  const response = await makeRequest(`/api/v1/workflows${query}`);
+
+  const term = searchTerm.toLowerCase();
+  const matches = response.data.filter(wf =>
+    wf.name.toLowerCase().includes(term) ||
+    wf.id.toLowerCase().includes(term)
+  );
+
+  if (matches.length === 0) {
+    console.log(`\n❌ No workflows found matching: "${searchTerm}"\n`);
+    return;
+  }
+
+  console.log(`\n🔍 Found ${matches.length} workflow(s) matching "${searchTerm}":\n`);
+  matches.forEach(wf => {
+    const status = wf.active ? '✅' : '⭕';
+    console.log(`${status} ${wf.id} - ${wf.name}`);
+  });
+  console.log('');
+}
+
+async function getWorkflowErrors(workflowId, limit = 5) {
+  console.log(`\n🔍 Fetching recent errors for workflow ${workflowId}...\n`);
+
+  const response = await makeRequest(`/api/v1/executions?workflowId=${workflowId}&status=error&limit=${limit}&includeData=true`);
+
+  if (!response.data || response.data.length === 0) {
+    console.log('✅ No recent errors found!\n');
+    return;
+  }
+
+  console.log(`❌ Found ${response.data.length} failed execution(s):\n`);
+
+  for (const exec of response.data) {
+    const fullExec = await makeRequest(`/api/v1/executions/${exec.id}?includeData=true`);
+
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`Execution ID: ${exec.id}`);
+    console.log(`Date: ${new Date(exec.stoppedAt).toLocaleString()}`);
+    console.log(`Mode: ${exec.mode}`);
+
+    // Extract error information
+    const runData = fullExec.data?.resultData?.runData;
+    if (runData) {
+      Object.entries(runData).forEach(([nodeName, nodeData]) => {
+        const node = nodeData[0];
+        if (node.error) {
+          console.log(`\n❌ Node: ${nodeName}`);
+          console.log(`   Error: ${node.error.message || JSON.stringify(node.error)}`);
+          if (node.error.description) {
+            console.log(`   Details: ${node.error.description}`);
+          }
+        }
+      });
+    }
+
+    // Check for lastNodeExecuted
+    if (fullExec.data?.resultData?.lastNodeExecuted) {
+      console.log(`\n⚠️  Last executed node: ${fullExec.data.resultData.lastNodeExecuted}`);
+    }
+
+    console.log('');
+  }
+
+  console.log(`💡 Tip: Pull execution details with:\n   ./n8n pull-executions ${workflowId}\n`);
+}
+
+async function validateWorkflow(filePath) {
+  console.log(`\n🔍 Validating workflow: ${filePath}\n`);
+
+  if (!fs.existsSync(filePath)) {
+    console.error(`❌ File not found: ${filePath}\n`);
+    return false;
+  }
+
+  let workflow;
+  try {
+    workflow = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (error) {
+    console.error(`❌ Invalid JSON: ${error.message}\n`);
+    return false;
+  }
+
+  let valid = true;
+
+  // Check required fields
+  const requiredFields = ['name', 'nodes', 'connections'];
+  requiredFields.forEach(field => {
+    if (!workflow[field]) {
+      console.error(`❌ Missing required field: ${field}`);
+      valid = false;
+    }
+  });
+
+  // Check nodes
+  if (workflow.nodes && Array.isArray(workflow.nodes)) {
+    console.log(`✅ ${workflow.nodes.length} node(s) found`);
+
+    workflow.nodes.forEach((node, idx) => {
+      if (!node.name) {
+        console.error(`❌ Node ${idx} missing name`);
+        valid = false;
+      }
+      if (!node.type) {
+        console.error(`❌ Node ${idx} (${node.name || 'unnamed'}) missing type`);
+        valid = false;
+      }
+    });
+  } else {
+    console.error(`❌ Invalid nodes structure`);
+    valid = false;
+  }
+
+  // Check connections
+  if (workflow.connections && typeof workflow.connections === 'object') {
+    console.log(`✅ Connections structure valid`);
+  } else {
+    console.error(`❌ Invalid connections structure`);
+    valid = false;
+  }
+
+  // Check for common issues
+  if (workflow.nodes) {
+    const nodeNames = workflow.nodes.map(n => n.name);
+    const duplicates = nodeNames.filter((name, idx) => nodeNames.indexOf(name) !== idx);
+    if (duplicates.length > 0) {
+      console.error(`⚠️  Warning: Duplicate node names found: ${duplicates.join(', ')}`);
+    }
+  }
+
+  console.log('');
+  if (valid) {
+    console.log(`✅ Workflow is valid!\n`);
+  } else {
+    console.log(`❌ Workflow has validation errors\n`);
+  }
+
+  return valid;
+}
+
+async function compareExecutions(workflowId, successId, failedId) {
+  console.log(`\n🔍 Comparing executions...\n`);
+
+  const success = await makeRequest(`/api/v1/executions/${successId}?includeData=true`);
+  const failed = await makeRequest(`/api/v1/executions/${failedId}?includeData=true`);
+
+  console.log(`✅ Success: ${successId} (${new Date(success.stoppedAt).toLocaleString()})`);
+  console.log(`❌ Failed:  ${failedId} (${new Date(failed.stoppedAt).toLocaleString()})`);
+  console.log('');
+
+  const successNodes = Object.keys(success.data?.resultData?.runData || {});
+  const failedNodes = Object.keys(failed.data?.resultData?.runData || {});
+
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  console.log(`Node Execution Comparison:\n`);
+
+  const allNodes = new Set([...successNodes, ...failedNodes]);
+
+  allNodes.forEach(nodeName => {
+    const successNode = success.data?.resultData?.runData?.[nodeName]?.[0];
+    const failedNode = failed.data?.resultData?.runData?.[nodeName]?.[0];
+
+    if (successNode && failedNode) {
+      if (failedNode.error) {
+        console.log(`❌ ${nodeName}`);
+        console.log(`   Success: ✅ (${successNode.executionTime}ms)`);
+        console.log(`   Failed:  ❌ ${failedNode.error.message || 'Error'}`);
+      } else {
+        const successItems = successNode.data?.main?.[0]?.length || 0;
+        const failedItems = failedNode.data?.main?.[0]?.length || 0;
+        if (successItems !== failedItems) {
+          console.log(`⚠️  ${nodeName}`);
+          console.log(`   Success: ${successItems} items`);
+          console.log(`   Failed:  ${failedItems} items`);
+        }
+      }
+    } else if (!failedNode) {
+      console.log(`⚠️  ${nodeName} - Not executed in failed run`);
+    } else if (!successNode) {
+      console.log(`⚠️  ${nodeName} - Only in failed run`);
+    }
+  });
+
+  console.log(`\n💡 Pull both executions for detailed analysis:`);
+  console.log(`   ./n8n pull-executions ${workflowId}\n`);
+}
+
 async function pullWorkflow(workflowId) {
   console.log(`\n📥 Pulling workflow ${workflowId}...`);
 
@@ -199,7 +394,13 @@ async function pushWorkflow(filePath) {
     process.exit(1);
   }
 
-  const workflow = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  let workflow;
+  try {
+    workflow = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (error) {
+    console.error(`❌ Invalid JSON in file: ${error.message}\n`);
+    process.exit(1);
+  }
 
   // Only core workflow definition fields are writable via API
   const allowedFields = [
@@ -250,6 +451,39 @@ async function main() {
         await listWorkflows();
         break;
 
+      case 'search':
+        if (!arg) {
+          console.error('Usage: n8n search <term>');
+          process.exit(1);
+        }
+        await searchWorkflows(arg);
+        break;
+
+      case 'errors':
+        if (!arg) {
+          console.error('Usage: n8n errors <workflow-id> [limit]');
+          process.exit(1);
+        }
+        const errorLimit = process.argv[4] || 5;
+        await getWorkflowErrors(arg, errorLimit);
+        break;
+
+      case 'validate':
+        if (!arg) {
+          console.error('Usage: n8n validate <workflow-file.json>');
+          process.exit(1);
+        }
+        await validateWorkflow(arg);
+        break;
+
+      case 'compare-executions':
+        if (!arg || !process.argv[4] || !process.argv[5]) {
+          console.error('Usage: n8n compare-executions <workflow-id> <success-execution-id> <failed-execution-id>');
+          process.exit(1);
+        }
+        await compareExecutions(arg, process.argv[4], process.argv[5]);
+        break;
+
       case 'pull':
         if (arg === 'all' || !arg) {
           await pullAllWorkflows();
@@ -281,14 +515,21 @@ async function main() {
 n8n CLI - Manage workflows locally
 
 Usage:
-  n8n list                           List all workflows
-  n8n pull [workflow-id|all]         Pull workflow(s) to local JSON files
-  n8n pull-executions <id> [limit]   Pull execution data for a workflow
-  n8n push <file.json>               Push local workflow changes to n8n
-  n8n help                           Show this help
+  n8n list                                    List all workflows
+  n8n search <term>                           Search workflows by name
+  n8n errors <workflow-id> [limit]            Show recent errors for a workflow
+  n8n validate <file.json>                    Validate workflow JSON before pushing
+  n8n compare-executions <wf-id> <ok> <fail>  Compare successful vs failed executions
+  n8n pull [workflow-id|all]                  Pull workflow(s) to local JSON files
+  n8n pull-executions <id> [limit]            Pull execution data for a workflow
+  n8n push <file.json>                        Push local workflow changes to n8n
+  n8n help                                    Show this help
 
 Examples:
-  n8n list
+  n8n search "Todoist"
+  n8n errors mp3KdoJFgCDT5ktt
+  n8n validate workflows/mp3KdoJFgCDT5ktt_Workflow.json
+  n8n compare-executions mp3KdoJFgCDT5ktt 437776 440301
   n8n pull all
   n8n pull mp3KdoJFgCDT5ktt
   n8n pull-executions mp3KdoJFgCDT5ktt 20

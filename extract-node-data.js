@@ -31,7 +31,14 @@ if (!fs.existsSync(file)) {
   process.exit(1);
 }
 
-const execution = JSON.parse(fs.readFileSync(file, 'utf8'));
+let execution;
+try {
+  execution = JSON.parse(fs.readFileSync(file, 'utf8'));
+} catch (error) {
+  console.error(`Error: Invalid JSON in file: ${error.message}`);
+  process.exit(1);
+}
+
 const runData = execution.data?.resultData?.runData;
 
 if (!runData) {

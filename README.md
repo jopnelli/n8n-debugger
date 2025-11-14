@@ -56,6 +56,7 @@ Helper scripts:
 Documentation:
 
 - **`README.md`** - This file
+- **`INSTRUCTIONS.md`** - Agent guide for AI debugging workflows
 
 The `workflows/` and `executions/` folders are created automatically when you use the tool.
 
@@ -66,10 +67,24 @@ The `workflows/` and `executions/` folders are created automatically when you us
 
 ## Usage
 
-### List Workflows
+### Discovery & Search
 
 ```bash
+# List all workflows
 ./n8n list
+
+# Search workflows by name
+./n8n search "Todoist"
+```
+
+### Debugging
+
+```bash
+# Show recent errors for a workflow
+./n8n errors mp3KdoJFgCDT5ktt
+
+# Compare successful vs failed executions
+./n8n compare-executions mp3KdoJFgCDT5ktt 437776 440301
 ```
 
 ### Pull Workflows
@@ -95,7 +110,10 @@ The `workflows/` and `executions/` folders are created automatically when you us
 ### Push Workflow Changes
 
 ```bash
-# Edit workflow JSON locally, then push
+# Validate before pushing
+./n8n validate workflows/mp3KdoJFgCDT5ktt_Workflow_Name.json
+
+# Push changes
 ./n8n push workflows/mp3KdoJFgCDT5ktt_Workflow_Name.json
 ```
 
@@ -126,8 +144,28 @@ n8n-scripts/
 
 1. **Pull workflow**: `./n8n pull <workflow-id>`
 2. **Edit locally**: Modify the JSON in `workflows/` directory
-3. **Push changes**: `./n8n push workflows/<file>.json`
-4. **Debug with executions**: `./n8n pull-executions <workflow-id>` to see actual node outputs
+3. **Validate**: `./n8n validate workflows/<file>.json`
+4. **Push changes**: `./n8n push workflows/<file>.json`
+5. **Debug with executions**: `./n8n pull-executions <workflow-id>` to see actual node outputs
+
+## For AI Agents
+
+This tool is designed to be agent-friendly! See **[INSTRUCTIONS.md](INSTRUCTIONS.md)** for a complete guide on:
+- Finding workflows by name
+- Extracting error details
+- Analyzing execution data
+- Comparing failed vs successful runs
+- Validating and pushing fixes
+
+**Quick agent workflow:**
+```bash
+./n8n search "My Workflow"     # Find the workflow
+./n8n errors <workflow-id>      # See what's failing
+./n8n pull <workflow-id>        # Get the workflow
+# ... edit the JSON ...
+./n8n validate <file>           # Check it's valid
+./n8n push <file>              # Deploy the fix
+```
 
 ## Analyzing Execution Data
 
