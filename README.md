@@ -67,11 +67,6 @@ Essential files:
 - **`.env.example`** - Environment variables template
 - **`.gitignore`** - Keeps credentials safe
 
-Helper scripts:
-
-- **`extract-node-data.js`** - Analyze execution node outputs
-- **`diff-workflow.sh`** - Compare local vs remote workflows
-
 The `workflows/` and `executions/` folders are created automatically when you use the tool.
 
 ## Requirements
@@ -188,28 +183,8 @@ Manual workflow debugging commands:
 ./n8n push <file>              # Deploy the fix
 ```
 
-## Analyzing Execution Data
-
-Use the helper script to inspect node outputs from executions:
-
-```bash
-# List all nodes in an execution
-./extract-node-data.js executions/<workflow-id>/<execution-id>.json
-
-# Extract specific node output
-./extract-node-data.js executions/<workflow-id>/<execution-id>.json "Node Name"
-```
-
-Example:
-
-```bash
-./extract-node-data.js executions/mp3KdoJFgCDT5ktt/437776_manual_success.json
-./extract-node-data.js executions/mp3KdoJFgCDT5ktt/437776_manual_success.json "Get many rows Katalog"
-```
-
 ## Tips
 
 - Execution files contain full node data including inputs/outputs
 - Use executions for debugging - see exactly what each node produced
 - Workflow files can be version controlled (but keep `.env` private)
-- Use `extract-node-data.js` to quickly inspect what data flows through each node
