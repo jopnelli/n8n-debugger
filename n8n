@@ -305,6 +305,47 @@ async function compareExecutions(workflowId, successId, failedId) {
   console.log(`   ./n8n pull-executions ${workflowId}\n`);
 }
 
+function cleanDownloads(target = 'all') {
+  console.log(`\n🧹 Cleaning downloaded files...\n`);
+
+  let removed = 0;
+
+  if (target === 'all' || target === 'workflows') {
+    if (fs.existsSync(WORKFLOWS_DIR)) {
+      const files = fs.readdirSync(WORKFLOWS_DIR);
+      files.forEach(file => {
+        fs.unlinkSync(path.join(WORKFLOWS_DIR, file));
+        removed++;
+      });
+      console.log(`✅ Removed ${files.length} workflow file(s)`);
+    }
+  }
+
+  if (target === 'all' || target === 'executions') {
+    if (fs.existsSync(EXECUTIONS_DIR)) {
+      const dirs = fs.readdirSync(EXECUTIONS_DIR);
+      dirs.forEach(dir => {
+        const dirPath = path.join(EXECUTIONS_DIR, dir);
+        if (fs.statSync(dirPath).isDirectory()) {
+          const files = fs.readdirSync(dirPath);
+          files.forEach(file => {
+            fs.unlinkSync(path.join(dirPath, file));
+            removed++;
+          });
+          fs.rmdirSync(dirPath);
+        }
+      });
+      console.log(`✅ Removed ${dirs.length} execution folder(s)`);
+    }
+  }
+
+  if (removed === 0) {
+    console.log('No files to clean.');
+  }
+
+  console.log('');
+}
+
 async function pullWorkflow(workflowId) {
   console.log(`\n📥 Pulling workflow ${workflowId}...`);
 
@@ -492,6 +533,15 @@ async function main() {
         await pushWorkflow(arg);
         break;
 
+      case 'clean':
+        const cleanTarget = arg || 'all';
+        if (!['all', 'workflows', 'executions'].includes(cleanTarget)) {
+          console.error('Usage: n8n clean [all|workflows|executions]');
+          process.exit(1);
+        }
+        cleanDownloads(cleanTarget);
+        break;
+
       case 'help':
       default:
         console.log(`
@@ -506,6 +556,7 @@ Usage:
   n8n pull [workflow-id|all]                  Pull workflow(s) to local JSON files
   n8n pull-executions <id> [limit]            Pull execution data for a workflow
   n8n push <file.json>                        Push local workflow changes to n8n
+  n8n clean [all|workflows|executions]        Remove downloaded files
   n8n help                                    Show this help
 
 Examples:
@@ -517,6 +568,7 @@ Examples:
   n8n pull mp3KdoJFgCDT5ktt
   n8n pull-executions mp3KdoJFgCDT5ktt 20
   n8n push workflows/mp3KdoJFgCDT5ktt_Employee_Education_Plans.json
+  n8n clean workflows
 
 Files are stored in:
   ./workflows/     - Workflow JSON files

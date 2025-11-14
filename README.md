@@ -22,6 +22,16 @@ No coding required on your part - describe the problem however you want, and the
 
 Works with: Claude Code, Cursor, or any AI assistant with file access.
 
+### Important: Testing Workflow Fixes
+
+**Limitation:** Workflows cannot be tested locally before pushing to n8n. The workflow must be pushed to n8n and manually executed to verify the fix works.
+
+**Best practice for agents:**
+1. Validate the workflow structure with `./n8n validate`
+2. Ask the user: *"Should I push this fix to n8n?"*
+3. After pushing, inform user: *"Fix has been pushed. Please test the workflow manually in n8n to verify it works."*
+4. Optionally: Ask user to report back if fix worked, then use `./n8n clean` to remove downloaded files
+
 ---
 
 ## Quick Setup (For First Time)
@@ -118,6 +128,19 @@ The `workflows/` and `executions/` folders are created automatically when you us
 
 # Push changes
 ./n8n push workflows/mp3KdoJFgCDT5ktt_Workflow_Name.json
+```
+
+### Cleanup
+
+```bash
+# Remove all downloaded files
+./n8n clean
+
+# Remove only workflows
+./n8n clean workflows
+
+# Remove only executions
+./n8n clean executions
 ```
 
 **Note:** Only core workflow fields can be updated via push:
