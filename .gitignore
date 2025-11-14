@@ -1,0 +1,13 @@
+# Config with credentials
+.n8n-config.json
+
+# Dependencies
+node_modules/
+
+# Downloaded data (optional - you may want to version control workflows)
+workflows/
+executions/
+
+# OS
+.DS_Store
+Thumbs.db

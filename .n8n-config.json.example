@@ -1,0 +1,5 @@
+{
+  "baseUrl": "https://your-n8n-instance.com",
+  "apiKey": "your-api-key-here",
+  "projectId": "your-project-id-here-or-leave-empty"
+}

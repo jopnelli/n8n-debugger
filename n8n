@@ -1,0 +1,245 @@
+#!/usr/bin/env node
+
+const https = require('https');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const { URL } = require('url');
+
+// Configuration
+const CONFIG_FILE = path.join(__dirname, '.n8n-config.json');
+const WORKFLOWS_DIR = path.join(__dirname, 'workflows');
+const EXECUTIONS_DIR = path.join(__dirname, 'executions');
+
+// Ensure directories exist
+[WORKFLOWS_DIR, EXECUTIONS_DIR].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
+
+// Load config
+function loadConfig() {
+  if (!fs.existsSync(CONFIG_FILE)) {
+    console.error('Config file not found. Please create .n8n-config.json');
+    console.error('Example:');
+    console.error(JSON.stringify({
+      baseUrl: 'https://n8n.seibert.tools',
+      apiKey: 'your-api-key-here',
+      projectId: 'your-project-id'
+    }, null, 2));
+    process.exit(1);
+  }
+  return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+}
+
+// HTTP request helper
+function makeRequest(endpoint, method = 'GET', data = null) {
+  const config = loadConfig();
+  const url = new URL(endpoint, config.baseUrl);
+
+  const options = {
+    method,
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'X-N8N-API-KEY': config.apiKey
+    }
+  };
+
+  return new Promise((resolve, reject) => {
+    const protocol = url.protocol === 'https:' ? https : http;
+
+    const req = protocol.request(url, options, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            resolve(body);
+          }
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}: ${body}`));
+        }
+      });
+    });
+
+    req.on('error', reject);
+
+    if (data) {
+      req.write(JSON.stringify(data));
+    }
+
+    req.end();
+  });
+}
+
+// Commands
+async function listWorkflows() {
+  const config = loadConfig();
+  const query = config.projectId ? `?projectId=${config.projectId}` : '';
+  const response = await makeRequest(`/api/v1/workflows${query}`);
+
+  console.log('\n📋 Workflows:\n');
+  response.data.forEach(wf => {
+    const status = wf.active ? '✅' : '⭕';
+    console.log(`${status} ${wf.id} - ${wf.name}`);
+  });
+  console.log(`\nTotal: ${response.data.length} workflows\n`);
+}
+
+async function pullWorkflow(workflowId) {
+  console.log(`\n📥 Pulling workflow ${workflowId}...`);
+
+  const workflow = await makeRequest(`/api/v1/workflows/${workflowId}`);
+  const fileName = `${workflow.id}_${workflow.name.replace(/[^a-z0-9]/gi, '_')}.json`;
+  const filePath = path.join(WORKFLOWS_DIR, fileName);
+
+  fs.writeFileSync(filePath, JSON.stringify(workflow, null, 2));
+  console.log(`✅ Saved to: ${filePath}\n`);
+}
+
+async function pullAllWorkflows() {
+  const config = loadConfig();
+  const query = config.projectId ? `?projectId=${config.projectId}` : '';
+  const response = await makeRequest(`/api/v1/workflows${query}`);
+
+  console.log(`\n📥 Pulling ${response.data.length} workflows...`);
+
+  for (const wf of response.data) {
+    await pullWorkflow(wf.id);
+  }
+
+  console.log(`✅ All workflows pulled!\n`);
+}
+
+async function pullExecutions(workflowId, limit = 10) {
+  console.log(`\n📥 Pulling executions for workflow ${workflowId}...`);
+
+  const response = await makeRequest(`/api/v1/executions?workflowId=${workflowId}&limit=${limit}&includeData=true`);
+
+  if (!response.data || response.data.length === 0) {
+    console.log('No executions found.\n');
+    return;
+  }
+
+  const workflowDir = path.join(EXECUTIONS_DIR, workflowId);
+  if (!fs.existsSync(workflowDir)) {
+    fs.mkdirSync(workflowDir, { recursive: true });
+  }
+
+  for (const exec of response.data) {
+    const fileName = `${exec.id}_${exec.mode}_${exec.finished ? 'success' : 'failed'}.json`;
+    const filePath = path.join(workflowDir, fileName);
+
+    // Try to get full execution data with all node outputs
+    try {
+      const fullExec = await makeRequest(`/api/v1/executions/${exec.id}?includeData=true`);
+      fs.writeFileSync(filePath, JSON.stringify(fullExec, null, 2));
+
+      // Count nodes with data
+      const nodeCount = fullExec.data?.resultData?.runData ? Object.keys(fullExec.data.resultData.runData).length : 0;
+      const dataInfo = nodeCount > 0 ? ` (${nodeCount} nodes)` : ' (no node data)';
+
+      console.log(`  ✅ ${exec.id} - ${exec.mode} - ${exec.finished ? '✅' : '❌'}${dataInfo}`);
+    } catch (error) {
+      // Fallback to basic execution data if full data fetch fails
+      fs.writeFileSync(filePath, JSON.stringify(exec, null, 2));
+      console.log(`  ⚠️  ${exec.id} - ${exec.mode} - ${exec.finished ? '✅' : '❌'} (basic data only)`);
+    }
+  }
+
+  console.log(`\n✅ Saved ${response.data.length} executions to: ${workflowDir}\n`);
+}
+
+async function pushWorkflow(filePath) {
+  console.log(`\n📤 Pushing workflow from ${filePath}...`);
+
+  if (!fs.existsSync(filePath)) {
+    console.error(`❌ File not found: ${filePath}\n`);
+    process.exit(1);
+  }
+
+  const workflow = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+  if (workflow.id) {
+    // Update existing workflow
+    const { id, ...updateData } = workflow;
+    await makeRequest(`/api/v1/workflows/${id}`, 'PUT', updateData);
+    console.log(`✅ Updated workflow ${id}\n`);
+  } else {
+    // Create new workflow
+    const response = await makeRequest('/api/v1/workflows', 'POST', workflow);
+    console.log(`✅ Created workflow ${response.id}\n`);
+  }
+}
+
+// CLI
+const command = process.argv[2];
+const arg = process.argv[3];
+
+async function main() {
+  try {
+    switch (command) {
+      case 'list':
+        await listWorkflows();
+        break;
+
+      case 'pull':
+        if (arg === 'all' || !arg) {
+          await pullAllWorkflows();
+        } else {
+          await pullWorkflow(arg);
+        }
+        break;
+
+      case 'pull-executions':
+        if (!arg) {
+          console.error('Usage: n8n pull-executions <workflow-id> [limit]');
+          process.exit(1);
+        }
+        const limit = process.argv[4] || 10;
+        await pullExecutions(arg, limit);
+        break;
+
+      case 'push':
+        if (!arg) {
+          console.error('Usage: n8n push <workflow-file.json>');
+          process.exit(1);
+        }
+        await pushWorkflow(arg);
+        break;
+
+      case 'help':
+      default:
+        console.log(`
+n8n CLI - Manage workflows locally
+
+Usage:
+  n8n list                           List all workflows
+  n8n pull [workflow-id|all]         Pull workflow(s) to local JSON files
+  n8n pull-executions <id> [limit]   Pull execution data for a workflow
+  n8n push <file.json>               Push local workflow changes to n8n
+  n8n help                           Show this help
+
+Examples:
+  n8n list
+  n8n pull all
+  n8n pull mp3KdoJFgCDT5ktt
+  n8n pull-executions mp3KdoJFgCDT5ktt 20
+  n8n push workflows/mp3KdoJFgCDT5ktt_Employee_Education_Plans.json
+
+Files are stored in:
+  ./workflows/     - Workflow JSON files
+  ./executions/    - Execution data organized by workflow ID
+        `);
+    }
+  } catch (error) {
+    console.error(`\n❌ Error: ${error.message}\n`);
+    process.exit(1);
+  }
+}
+
+main();
