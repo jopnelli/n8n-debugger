@@ -27,10 +27,11 @@ Works with: Claude Code, Cursor, or any AI assistant with file access.
 **Limitation:** Workflows cannot be tested locally before pushing to n8n. The workflow must be pushed to n8n and manually executed to verify the fix works.
 
 **Best practice for agents:**
-1. Validate the workflow structure with `./n8n validate`
-2. Ask the user: *"Should I push this fix to n8n?"*
-3. After pushing, inform user: *"Fix has been pushed. Please test the workflow manually in n8n to verify it works."*
-4. Optionally: Ask user to report back if fix worked, then use `./n8n clean` to remove downloaded files
+1. Point out the issue found and explain the fix made
+2. Validate the workflow structure with `./n8n validate`
+3. Ask the user: *"Should I push this fix to n8n?"*
+4. After pushing, inform user: *"Fix has been pushed. Please test the workflow manually in n8n to verify it works."*
+5. Optionally: Ask user to report back if fix worked, then use `./n8n clean` to remove downloaded files
 
 ---
 
