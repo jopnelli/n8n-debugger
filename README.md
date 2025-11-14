@@ -1,8 +1,8 @@
-# n8n CLI Tool
+# n8n Debugger
 
 A command-line tool to manage n8n workflows and executions locally.
 
-## 🤖 AI Agent Mode
+## AI Agent Mode
 
 This tool can be used by AI agents to autonomously debug and fix n8n workflows. When you describe a workflow problem to an AI assistant, the agent can:
 
@@ -27,10 +27,11 @@ Works with: Claude Code, Cursor, or any AI assistant with file access.
 **Limitation:** Workflows cannot be tested locally before pushing to n8n. The workflow must be pushed to n8n and manually executed to verify the fix works.
 
 **Best practice for agents:**
+
 1. Point out the issue found and explain the fix made
 2. Validate the workflow structure with `./n8n validate`
-3. Ask the user: *"Should I push this fix to n8n?"*
-4. After pushing, inform user: *"Fix has been pushed. Please test the workflow manually in n8n to verify it works."*
+3. Ask the user: _"Should I push this fix to n8n?"_
+4. After pushing, inform user: _"Fix has been pushed. Please test the workflow manually in n8n to verify it works."_
 5. Optionally: Ask user to report back if fix worked, then use `./n8n clean` to remove downloaded files
 
 ---
@@ -152,7 +153,7 @@ Read-only fields (like `active`, `tags`, timestamps) are automatically filtered 
 ## Directory Structure
 
 ```
-n8n-scripts/
+n8n-debugger/
 ├── n8n                     # CLI executable
 ├── .env                    # API credentials (gitignored)
 ├── workflows/              # Pulled workflow JSON files
