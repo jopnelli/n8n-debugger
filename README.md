@@ -4,7 +4,7 @@ A command-line tool to manage n8n workflows and executions locally.
 
 ## 🤖 AI Agent Mode
 
-This tool can be used by AI agents to autonomously debug and fix n8n workflows. When you describe a workflow problem to an AI assistant (in any phrasing), the agent can:
+This tool can be used by AI agents to autonomously debug and fix n8n workflows. When you describe a workflow problem to an AI assistant, the agent can:
 
 1. **Find** the workflow by searching for it by name
 2. **Pull** workflow definition and recent error logs
@@ -12,7 +12,7 @@ This tool can be used by AI agents to autonomously debug and fix n8n workflows. 
 4. **Fix** the issue by editing the workflow JSON
 5. **Validate** and **push** the corrected workflow back to n8n
 
-No coding required on your part - describe the problem however you want, and the agent handles the technical work.
+No coding required - describe the problem and the agent handles the technical work.
 
 ### Setup for AI Assistants
 
@@ -35,7 +35,7 @@ Works with: Claude Code, Cursor, or any AI assistant with file access.
 
 ---
 
-## Quick Setup (For First Time)
+## Quick Setup
 
 **One-line setup**:
 
@@ -60,7 +60,7 @@ Test it works:
 
 ## What's Included
 
-Essential files (always needed):
+Essential files:
 
 - **`n8n`** - Main CLI tool
 - **`setup.sh`** - One-command setup
@@ -177,7 +177,7 @@ n8n-scripts/
 
 ## For Developers
 
-Manual workflow debugging commands are available for hands-on troubleshooting:
+Manual workflow debugging commands:
 
 ```bash
 ./n8n search "My Workflow"     # Find the workflow
@@ -187,8 +187,6 @@ Manual workflow debugging commands are available for hands-on troubleshooting:
 ./n8n validate <file>           # Check it's valid
 ./n8n push <file>              # Deploy the fix
 ```
-
-See sections below for detailed usage.
 
 ## Analyzing Execution Data
 
